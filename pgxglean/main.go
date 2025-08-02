@@ -44,6 +44,8 @@ type Field struct {
 	Column string
 	// Accessor is the field or method to use when constructing the output struct
 	Accessor string
+	/// Method is the glean method to use when constructing the output struct
+	Method string
 	// If this is the first field
 	First bool
 }
@@ -173,8 +175,8 @@ func scan(row pgx.Row) (*{{ .OutputType }}, error) {
 		return nil, err
 	}
 
-	return &{{.OutputType}}{ {{range .Fields}}
-		{{ .Name }}: g.{{ .Name }}{{ .Accessor }},{{ end }}
+	return &{{ .OutputType }}{ {{ range .Fields }}
+		{{ .Name }}: {{ if .Method }}g.{{ .Method }}(),{{ else }}g.{{ .Name }}{{ .Accessor }},{{ end }}{{ end }}
 	}, nil
 }
 

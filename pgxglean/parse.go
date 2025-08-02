@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/rossmacarthur/cases"
 	"github.com/rossmacarthur/fudge"
@@ -52,6 +53,19 @@ func parseConfig() (*Config, error) {
 		return nil, errors.New("embedded type is not a named type")
 	}
 
+	methods, err := loadStructMethods(pkg, "glean")
+	if err != nil {
+		return nil, err
+	}
+	methodByFieldName := make(map[string]*types.Func)
+	for _, m := range methods {
+		name := m.Name()
+		if !strings.HasPrefix(name, "to") {
+			return nil, errors.New("method name must start with 'to'", fudge.KV("method_name", name))
+		}
+		methodByFieldName[name[2:]] = m
+	}
+
 	outputType := fmt.Sprintf("%s.%s", ft.Obj().Pkg().Name(), ft.Obj().Name())
 	outputImport := ft.Obj().Pkg().Path()
 
@@ -84,7 +98,12 @@ func parseConfig() (*Config, error) {
 			f.Column = tag
 		}
 
-		f.Accessor = getAccessor(field)
+		// If there is conversion method, we should use that instead of the accessor
+		if m, ok := methodByFieldName[field.Name()]; ok {
+			f.Method = m.Name()
+		} else {
+			f.Accessor = getAccessor(field)
+		}
 	}
 
 	fields[0].First = true
@@ -159,4 +178,23 @@ func loadStruct(pkg *packages.Package, name string) (*types.Struct, error) {
 		})
 	}
 	return st, nil
+}
+
+func loadStructMethods(pkg *packages.Package, name string) ([]*types.Func, error) {
+	obj := pkg.Types.Scope().Lookup(name)
+	if obj == nil {
+		return nil, errors.New("failed to find type by name", fudge.KV("struct_name", name))
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return nil, errors.New("expected type to be a named type", fudge.MKV{
+			"struct_name": name,
+			"actual_type": obj.Type().String(),
+		})
+	}
+	var methods []*types.Func
+	for i := 0; i < named.NumMethods(); i++ {
+		methods = append(methods, named.Method(i))
+	}
+	return methods, nil
 }
