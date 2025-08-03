@@ -129,6 +129,7 @@ func getGenSource() string {
 }
 
 var commons = map[string]string{
+	"sql.Null":        ".V",
 	"sql.NullBool":    ".Bool",
 	"sql.NullInt32":   ".Int32",
 	"sql.NullInt64":   ".Int64",
